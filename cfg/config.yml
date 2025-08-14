@@ -1,0 +1,14 @@
+GENERAL:
+  repo_url: xxx"
+  repo_path: "xxx"
+  job_json: "pipelines/dev_pipeline.json"
+
+DEV:
+  repo_branch: "dev"
+  repo_id: "2762953649173864"
+  workspace_url: "xxx"
+
+PROD:
+  repo_branch: "main"
+  repo_id: "2276737235821764"
+  workspace_url: "xxx"

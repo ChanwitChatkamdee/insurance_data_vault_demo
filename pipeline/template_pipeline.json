@@ -1,0 +1,233 @@
+{
+  "name": "insurance_demo",
+  "email_notifications": {
+    "no_alert_for_skipped_runs": false
+  },
+  "webhook_notifications": {},
+  "timeout_seconds": 0,
+  "max_concurrent_runs": 1,
+  "tasks": [
+    {
+      "task_key": "ingest_raw",
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/bronze_raw/sc_bz_source_name.dt_customer_journey_daily",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "hub_agent_daily",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/agent/sc_sv_dv.hub_agent_daily",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "hub_customer_daily",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/customer/sc_sv_dv.hub_customer_daily",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "hub_policy",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/policy/sc_sv_dv.hub_policy",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "link_customer_policy",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/policy/sc_sv_dv.link_customer_policy",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "link_policy_agent",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/policy/sc_sv_dv.link_policy_agent",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "sat_agent_details",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/agent/sc_sv_dv.sat_agent_details",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "sat_customer_personinfo",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/customer/sc_sv_dv.sat_customer_personinfo",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "sat_policy_details",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/policy/sc_sv_dv.sat_policy_details",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "sat_policy_status_event",
+      "depends_on": [
+        {
+          "task_key": "ingest_raw"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/silver_raw_vault/policy/sc_sv_dv.sat_policy_status_event",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {}
+    },
+    {
+      "task_key": "customer_360",
+      "depends_on": [
+        {
+          "task_key": "link_policy_agent"
+        },
+        {
+          "task_key": "hub_customer_daily"
+        },
+        {
+          "task_key": "sat_customer_personinfo"
+        },
+        {
+          "task_key": "link_customer_policy"
+        },
+        {
+          "task_key": "hub_policy"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "notebook_task": {
+        "notebook_path": "/Workspace/Users/xxx/insurance_dv_2.0_demo/gold_domain/customer/sc_sv_bv_customer.customer_360",
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "Job_cluster",
+      "timeout_seconds": 0,
+      "email_notifications": {}
+    }
+  ],
+  "job_clusters": [
+    {
+      "job_cluster_key": "Job_cluster",
+      "new_cluster": {
+        "cluster_name": "",
+        "spark_version": "16.4.x-scala2.12",
+        "azure_attributes": {
+          "first_on_demand": 1,
+          "availability": "SPOT_WITH_FALLBACK_AZURE",
+          "spot_bid_max_price": -1
+        },
+        "node_type_id": "Standard_D3_v2",
+        "spark_env_vars": {
+          "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
+        },
+        "data_security_mode": "DATA_SECURITY_MODE_DEDICATED",
+        "runtime_engine": "STANDARD",
+        "kind": "CLASSIC_PREVIEW",
+        "is_single_node": false,
+        "autoscale": {
+          "min_workers": 2,
+          "max_workers": 10
+        }
+      }
+    }
+  ],
+  "queue": {
+    "enabled": true
+  },
+}

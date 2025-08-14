@@ -1,0 +1,134 @@
+name: Deploy Prd Databricks Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  render-and-deploy:
+    runs-on: ubuntu-latest
+    environment: PROD # 🔐 Links secrets to this environment
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      ENV: PROD # 📦 Sets shell variable ENV=PROD
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure CLI script - get Key Vault secrets
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            echo "Showing current Azure context:"
+            az account show
+
+            echo "Getting Key Vault secrets from 'kvtfseacentral001'..."
+            DATABRICKS_SP_ID=$(az keyvault secret show --vault-name kvtfseacentral001 --name testcicdprodid --query value -o tsv)
+            DATABRICKS_SP_SECRET=$(az keyvault secret show --vault-name kvtfseacentral001 --name testcicdprodsecret --query value -o tsv)
+            DATABRICKS_ACCOUNT_ID=$(az keyvault secret show --vault-name kvtfseacentral001 --name testcicdproddbaccid --query value -o tsv)
+
+            echo "::add-mask::$DATABRICKS_SP_ID"
+            echo "::add-mask::$DATABRICKS_SP_SECRET"
+            echo "::add-mask::$DATABRICKS_ACCOUNT_ID"
+
+            echo "DATABRICKS_SP_ID=$DATABRICKS_SP_ID" >> "$GITHUB_ENV"
+            echo "DATABRICKS_SP_SECRET=$DATABRICKS_SP_SECRET" >> "$GITHUB_ENV"
+            echo "DATABRICKS_ACCOUNT_ID=$DATABRICKS_ACCOUNT_ID" >> "$GITHUB_ENV"
+
+      - name: Install yq, jq, and envsubst
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext jq
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Get Databricks token
+        id: get-token
+        run: |
+          ACCESS_TOKEN=$(curl -s -X POST \
+            "https://accounts.azuredatabricks.net/oidc/accounts/$DATABRICKS_ACCOUNT_ID/v1/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=$DATABRICKS_SP_ID" \
+            -d "client_secret=$DATABRICKS_SP_SECRET" \
+            -d "grant_type=client_credentials" \
+            -d "scope=all-apis" | jq -r '.access_token')
+
+            echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Check existing pipeline
+        id: check-pipeline
+        run: |
+          WORKSPACE_URL=$(yq e ".${ENV}.workspace_url" cfg/config.yml)
+          JOB_NAME=$(jq -r '.name' src/pipelines/template_pipeline.json)
+          PAGE_TOKEN=""
+          FOUND_JOB_ID=""
+
+          while true; do
+            if [ -z "$PAGE_TOKEN" ]; then
+              RESPONSE=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" "$WORKSPACE_URL/api/2.2/jobs/list?limit=100")
+            else
+              RESPONSE=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" "$WORKSPACE_URL/api/2.2/jobs/list?limit=100&page_token=$PAGE_TOKEN")
+            fi
+
+            JOB_ID=$(echo "$RESPONSE" | jq -r --arg NAME "$JOB_NAME" '.jobs[] | select(.settings.name == $NAME) | .job_id')
+
+            if [ -n "$JOB_ID" ]; then
+              FOUND_JOB_ID="$JOB_ID"
+              echo "Found job ID: $FOUND_JOB_ID"
+              break
+            fi
+
+            PAGE_TOKEN=$(echo "$RESPONSE" | jq -r '.next_page_token')
+
+            if [ "$PAGE_TOKEN" == "null" ] || [ -z "$PAGE_TOKEN" ]; then
+              echo "Job not found."
+              break
+            fi
+          done
+
+          echo "FOUND_JOB_ID=$FOUND_JOB_ID" >> "$GITHUB_ENV"
+
+      - name: Pull latest code from Git
+        run: |
+          WORKSPACE_URL=$(yq e ".${ENV}.workspace_url" cfg/config.yml)
+          REPO_ID=$(yq e ".${ENV}.repo_id" cfg/config.yml)
+          BRANCH_NAME=$(yq e ".${ENV}.repo_branch" cfg/config.yml)
+
+          curl -s -X PATCH "${WORKSPACE_URL}/api/2.0/repos/${REPO_ID}" \
+            -H "Authorization: Bearer  $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"branch\": \"${BRANCH_NAME}\"}"
+
+      - name: Deploy or update pipeline
+        run: |
+          WORKSPACE_URL=$(yq e ".${ENV}.workspace_url" cfg/config.yml)
+          PIPELINE_PAYLOAD=$(cat src/pipelines/template_pipeline.json)
+          JOB_ID="$FOUND_JOB_ID"
+
+          if [ -n "$JOB_ID" ]; then
+            echo "Updating existing job with ID: $JOB_ID"
+            curl -s -X POST "$WORKSPACE_URL/api/2.2/jobs/reset" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --argjson settings "$PIPELINE_PAYLOAD" --arg id "$JOB_ID" \
+                '{job_id: ($id | tonumber), new_settings: $settings}')"
+          else
+            echo "Creating new job"
+            curl -s -X POST "$WORKSPACE_URL/api/2.2/jobs/create" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PIPELINE_PAYLOAD"
+          fi
